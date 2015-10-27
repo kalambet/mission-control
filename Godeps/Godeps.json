@@ -1,0 +1,7 @@
+{
+	"ImportPath": "gohelloworld",
+	"GoVersion": "go1.3.3",
+	"Deps": [
+		"github.com/kalambet/mission-control/service"
+	]
+}

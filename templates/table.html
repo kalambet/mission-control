@@ -1,0 +1,33 @@
+<style>
+
+.name {
+	width: 200px;
+}
+
+.state {
+	width: 100px;
+	text-align: center;
+}
+
+/*
+.progress {
+	width: 150px;
+}
+
+.team {
+	width: auto;
+}
+*/
+</style>
+
+<table>
+	<tr>
+		<th class="name">Service</th>
+		<th class="state">Status</th>
+	</tr>{{ range $service := . }}
+	<tr>
+		<td class="name">{{ $service.GetName }}</td>
+		{{if eq $service.GetStatus true}}<td class="state"><img src="/static/images/on.png"/></td>{{else}}<td class="state"><img src="/static/images/off.png"/></td>{{end}}
+	</tr>{{ end }}
+
+</table>
