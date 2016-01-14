@@ -1,4 +1,4 @@
-package data
+package types
 
 // SpaceEntity inner SpaceResource type
 type SpaceEntity struct {

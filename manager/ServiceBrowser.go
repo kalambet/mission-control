@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/kalambet/mission-control/config"
-	"github.com/kalambet/mission-control/data"
 	"github.com/kalambet/mission-control/services"
+	"github.com/kalambet/mission-control/types"
 )
 
 // ServiceBrowser logs into Bluemix
@@ -49,10 +49,10 @@ func (browser *ServiceBrowser) getBearerToken() (token string, err error) {
 	res, err := client.Do(req)
 	decoder := json.NewDecoder(res.Body)
 
-	var data data.LoginData
-	err = decoder.Decode(&data)
+	var loginData types.LoginData
+	err = decoder.Decode(&loginData)
 
-	token = data.AccessToken
+	token = loginData.AccessToken
 	fmt.Println("Token is : " + token)
 
 	return
@@ -61,8 +61,8 @@ func (browser *ServiceBrowser) getBearerToken() (token string, err error) {
 // GetServices searches the services by name in PaaS
 func (browser *ServiceBrowser) GetServices() (serviceList []*services.Service, err error) {
 	// 0. Get bearer token
-	//token, err := browser.getBearerToken()
-	//browser.token = token
+	token, err := browser.getBearerToken()
+	browser.token = token
 
 	// 1. Serach for organization ID
 	spacesURL, err := browser.getSpacesURLByOrgName()
@@ -111,7 +111,7 @@ func (browser *ServiceBrowser) getSpacesURLByOrgName() (_url string, err error) 
 
 	decoder := json.NewDecoder(res.Body)
 
-	var searchResults data.OrgSearchRes
+	var searchResults types.OrgSearchRes
 	err = decoder.Decode(&searchResults)
 
 	if searchResults.TotalResults != 1 {
@@ -148,7 +148,7 @@ func (browser *ServiceBrowser) getAppsURLBySpacesURL(spacesURL string) (_url str
 
 	decoder := json.NewDecoder(res.Body)
 
-	var searchResults data.SpaceSearchRes
+	var searchResults types.SpaceSearchRes
 	err = decoder.Decode(&searchResults)
 	if err != nil {
 		fmt.Println(err)
@@ -192,7 +192,7 @@ func (browser *ServiceBrowser) getServicesByName(appsURL string) (serviceList []
 
 	decoder := json.NewDecoder(res.Body)
 
-	var searchResults data.AppsSearchRes
+	var searchResults types.AppsSearchRes
 	err = decoder.Decode(&searchResults)
 	result := make([]*services.Service, len(browser.serviceConfig.Services))
 
@@ -244,7 +244,7 @@ func (browser *ServiceBrowser) CollectAndSaveServiceState(service *services.Serv
 	decoder := json.NewDecoder(res.Body)
 	decoder.UseNumber()
 
-	var serviceStates map[string]*data.InstanceState
+	var serviceStates map[string]*types.InstanceState
 	err = decoder.Decode(&serviceStates)
 	if err != nil {
 		fmt.Println(err)
@@ -252,7 +252,7 @@ func (browser *ServiceBrowser) CollectAndSaveServiceState(service *services.Serv
 	}
 
 	// We really do nedd map in our instances state list
-	var instancesStateList = make([]data.InstanceState, len(serviceStates))
+	var instancesStateList = make([]types.InstanceState, len(serviceStates))
 	for _, state := range serviceStates {
 		instancesStateList = append(instancesStateList, *state)
 	}

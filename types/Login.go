@@ -1,4 +1,4 @@
-package data
+package types
 
 // LoginData represents login request response
 type LoginData struct {

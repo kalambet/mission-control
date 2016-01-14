@@ -1,4 +1,4 @@
-package data
+package types
 
 // OrgEntity inner OrgResource type
 type OrgEntity struct {

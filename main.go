@@ -1,53 +1,59 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 
 	"github.com/kalambet/mission-control/manager"
-
-	//for extracting service credentials from VCAP_SERVICES
-	//"github.com/cloudfoundry-community/go-cfenv"
 )
 
 const (
-	DEFAULT_PORT = "8080"
+	defaultPort = "8080"
 )
 
-var index = template.Must(template.ParseFiles(
+var indexPage = template.Must(template.ParseFiles(
 	"templates/_base.html",
 	"templates/index.html",
 ))
 
-var table = template.Must(template.ParseFiles(
+var errorPage = template.Must(template.ParseFiles(
+	"templates/_base.html",
+	"templates/error.html",
+))
+
+var tablePage = template.Must(template.ParseFiles(
 	"templates/table.html",
 ))
 
-func helloworld(w http.ResponseWriter, req *http.Request) {
-	index.Execute(w, nil)
+var director = manager.Director{}
+
+func root(w http.ResponseWriter, req *http.Request) {
+	indexPage.Execute(w, nil)
 }
 
 func handleStatusRequest(w http.ResponseWriter, r *http.Request) {
-
-	//error := table.Execute(w, CreateServiceList())
-	//if error != nil {
-	//	fmt.Printf("\nError during template formation: %s\n", error)
-	//}
+	// For now we'll do it per request
+	// statistic collection capabilities will be added later
+	servicesStatus, err := director.GetServicesStatus()
+	if err != nil {
+		errorPage.Execute(w, nil)
+		return
+	}
+	err = tablePage.Execute(w, servicesStatus)
+	if err != nil {
+		fmt.Printf("\nError during template formation: %s\n", err)
+	}
 }
 
 func main() {
-	manager.Direct()
+	director.Init()
 
-	/*
-		var port string
-		if port = os.Getenv("PORT"); len(port) == 0 {
-			port = DEFAULT_PORT
-		}
-	*/
-	//http.HandleFunc("/", helloworld)
-	//http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	//http.HandleFunc("/status", handleStatusRequest)
+	http.HandleFunc("/", root)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.HandleFunc("/status", handleStatusRequest)
 
-	//log.Printf("Starting app on port %+v\n", port)
-	//http.ListenAndServe(":"+port, nil)
+	log.Printf("Starting app on port %+v\n", defaultPort)
+	http.ListenAndServe(":"+defaultPort, nil)
 }

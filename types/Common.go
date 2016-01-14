@@ -1,4 +1,4 @@
-package data
+package types
 
 // Metadata inner type of search results
 type Metadata struct {
