@@ -52,8 +52,3 @@ type AppsSearchRes struct {
 	NextURL      string         `json:"next_url"`
 	Resources    []AppsResource `json:"resources"`
 }
-
-// AppCurrentState contains information about app instances
-type AppCurrentState struct {
-	Instances []InstanceState
-}

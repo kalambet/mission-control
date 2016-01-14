@@ -1,16 +1,16 @@
 package services
 
-const (
-	// ServiceStatusTypeBasic is a status constant that represents the lightweight
-	// service with not much to monitor. For example like node.js, Ruby, Python
-	ServiceStatusTypeBasic = iota
+import (
+	"time"
 
-	// ServiceStatusTypeExtented is a status constant that represents the Java
-	// service with much more parmeters to monitor
-	ServiceStatusTypeExtented = iota
+	"github.com/kalambet/mission-control/data"
 )
 
 // ServiceStatus holds status of the service
 type ServiceStatus struct {
-	_type int
+	Name         string
+	Organization string
+	Space        string
+	Instances    []data.InstanceState
+	UpdateTime   time.Time
 }

@@ -1,11 +1,13 @@
 package data
 
+import "encoding/json"
+
 // InstanceUsage describes instance usage
 type InstanceUsage struct {
-	Time   string  `json:"time"`
-	CPU    float32 `json:"cpu"`
-	Memory int64   `json:"mem"`
-	Disk   int64   `json:"disk"`
+	Time   string      `json:"time"`
+	CPU    json.Number `json:"cpu"`
+	Memory int64       `json:"mem"`
+	Disk   int64       `json:"disk"`
 }
 
 // InstanceStats describes the instance statictics

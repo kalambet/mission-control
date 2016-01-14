@@ -10,32 +10,26 @@ import (
 	"github.com/kalambet/mission-control/services"
 )
 
-// Director is the main orchestator of the status cheking process
+// Director orchistrates the whole thing
 type Director struct {
-	_token string
+	browser      *ServiceBrowser
+	servicesList []*services.Service
 }
 
-// Direct is the main orchestration method
-func (d *Director) Direct() {
-	servicesList, err := d.Init()
-	if err != nil {
-		return
-	}
-
-	fmt.Println(servicesList)
-
-	//Goroutine for statistic gethering
-	return
-}
-
-// Init intialize all the environment and prepares monitor for status gathering
-func (d *Director) Init() (serviceList []*services.Service, err error) {
-	configuration, err := d.getConfig()
+// Init initialize Director with the users settings
+// and searches for the application ids
+func (d *Director) Init() (err error) {
+	// Reads monitor configuration from the
+	configuration, err := getConfig()
 	if err != nil || configuration == nil {
-		return
+		return err
 	}
 
-	serviceList, err = d.getServices(configuration)
+	d.browser = &ServiceBrowser{
+		serviceConfig: configuration,
+		token:         "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkZGQ4NGE4YS05YjNmLTQxMTQtOWViOC0yM2MyYTg2ODUzMGQiLCJzdWIiOiJmNzM1NDVhYy0xYTVkLTRjZGMtOTVkYy04MWE1N2VkODM3NjQiLCJzY29wZSI6WyJjbG91ZF9jb250cm9sbGVyLnJlYWQiLCJwYXNzd29yZC53cml0ZSIsImNsb3VkX2NvbnRyb2xsZXIud3JpdGUiLCJvcGVuaWQiXSwiY2xpZW50X2lkIjoiY2YiLCJjaWQiOiJjZiIsImF6cCI6ImNmIiwiZ3JhbnRfdHlwZSI6InBhc3N3b3JkIiwidXNlcl9pZCI6ImY3MzU0NWFjLTFhNWQtNGNkYy05NWRjLTgxYTU3ZWQ4Mzc2NCIsIm9yaWdpbiI6InVhYSIsInVzZXJfbmFtZSI6InBldGVyLmthbGFtYmV0QHJ1LmlibS5jb20iLCJlbWFpbCI6InBldGVyLmthbGFtYmV0QHJ1LmlibS5jb20iLCJhdXRoX3RpbWUiOjE0NTI2Njc5MjEsInJldl9zaWciOiJjZjkzZDhkZCIsImlhdCI6MTQ1MjY2NzkyMSwiZXhwIjoxNDUyNzExMTIxLCJpc3MiOiJodHRwczovL3VhYS5uZy5ibHVlbWl4Lm5ldC9vYXV0aC90b2tlbiIsInppZCI6InVhYSIsImF1ZCI6WyJjZiIsImNsb3VkX2NvbnRyb2xsZXIiLCJwYXNzd29yZCIsIm9wZW5pZCJdfQ.xyCKDoEJY5G4LiYQop9bbq58boYnf5PQt9JqyS_1Fow"}
+
+	d.servicesList, err = d.browser.GetServices()
 	if err != nil {
 		return
 	}
@@ -43,7 +37,24 @@ func (d *Director) Init() (serviceList []*services.Service, err error) {
 	return
 }
 
-func (d *Director) getConfig() (configuration *config.EnvConfig, err error) {
+// GetServicesStatus returns services staus by request
+func (d *Director) GetServicesStatus() (statusList []*services.ServiceStatus, err error) {
+	statusList = make([]*services.ServiceStatus, len(d.servicesList))
+
+	for _, service := range d.servicesList {
+		status, err := d.browser.CollectAndSaveServiceState(service)
+		if err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+		statusList = append(statusList, status)
+	}
+
+	return statusList, nil
+}
+
+// getConfig reads the config from the Environment Variables
+func getConfig() (configuration *config.EnvConfig, err error) {
 	// Let's read config from Environment Variable
 	var configString = os.Getenv("BMC_CONFIG")
 
@@ -63,26 +74,4 @@ func (d *Director) getConfig() (configuration *config.EnvConfig, err error) {
 	}
 
 	return &cfg, nil
-}
-
-func (d *Director) getServices(configuration *config.EnvConfig) (serviceList []*services.Service, err error) {
-	browser := ServiceBrowser{
-		serviceConfig: configuration,
-		token:         "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhMTNjM2IxZi02NmQxLTQyNTYtYmI3Zi0yM2M3OWU4ODQyNmIiLCJzdWIiOiJmNzM1NDVhYy0xYTVkLTRjZGMtOTVkYy04MWE1N2VkODM3NjQiLCJzY29wZSI6WyJjbG91ZF9jb250cm9sbGVyLnJlYWQiLCJwYXNzd29yZC53cml0ZSIsImNsb3VkX2NvbnRyb2xsZXIud3JpdGUiLCJvcGVuaWQiXSwiY2xpZW50X2lkIjoiY2YiLCJjaWQiOiJjZiIsImF6cCI6ImNmIiwiZ3JhbnRfdHlwZSI6InBhc3N3b3JkIiwidXNlcl9pZCI6ImY3MzU0NWFjLTFhNWQtNGNkYy05NWRjLTgxYTU3ZWQ4Mzc2NCIsIm9yaWdpbiI6InVhYSIsInVzZXJfbmFtZSI6InBldGVyLmthbGFtYmV0QHJ1LmlibS5jb20iLCJlbWFpbCI6InBldGVyLmthbGFtYmV0QHJ1LmlibS5jb20iLCJhdXRoX3RpbWUiOjE0NTI1MDY2ODUsInJldl9zaWciOiJjZjkzZDhkZCIsImlhdCI6MTQ1MjUwNjY4NSwiZXhwIjoxNDUyNTQ5ODg1LCJpc3MiOiJodHRwczovL3VhYS5uZy5ibHVlbWl4Lm5ldC9vYXV0aC90b2tlbiIsInppZCI6InVhYSIsImF1ZCI6WyJjZiIsImNsb3VkX2NvbnRyb2xsZXIiLCJwYXNzd29yZCIsIm9wZW5pZCJdfQ.1BBitoYuzgaP7eMxRnHHOqCQAS9EfhJhd8K3L2r88dw"}
-
-	serviceList, err = browser.GetServices()
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, errors.New("Not yet implemented")
-}
-
-//ReadServiceList returns list of services providede to the MC
-func ReadServiceList() (serviceList []*services.Service, err error) {
-	return nil, errors.New("Not yet implemented")
-}
-
-func getServicesStatus() (list []*services.ServiceStatus) {
-	return
 }

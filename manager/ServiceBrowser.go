@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/kalambet/mission-control/config"
 	"github.com/kalambet/mission-control/data"
@@ -32,9 +33,6 @@ func (browser *ServiceBrowser) getBearerToken() (token string, err error) {
 	loginForm.Add("scope", " ")
 	loginForm.Add("username", login)
 	loginForm.Add("password", password)
-
-	fmt.Println("Login Form: ")
-	fmt.Print(loginForm)
 
 	// Request bearer token to access PaaS resource
 	req, err := http.NewRequest(
@@ -64,22 +62,21 @@ func (browser *ServiceBrowser) getBearerToken() (token string, err error) {
 func (browser *ServiceBrowser) GetServices() (serviceList []*services.Service, err error) {
 	// 0. Get bearer token
 	//token, err := browser.getBearerToken()
-
 	//browser.token = token
 
 	// 1. Serach for organization ID
 	spacesURL, err := browser.getSpacesURLByOrgName()
-	fmt.Println("Spaces URL: " + spacesURL)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Spaces URL: " + spacesURL)
 
 	// 2. Search for space ID
 	appsURL, err := browser.getAppsURLBySpacesURL(spacesURL)
-	fmt.Println("Apps URL: " + appsURL)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Apps URL: " + appsURL)
 
 	// 3. Search for services
 	serviceList, err = browser.getServicesByName(appsURL)
@@ -87,7 +84,7 @@ func (browser *ServiceBrowser) GetServices() (serviceList []*services.Service, e
 		return nil, err
 	}
 
-	return
+	return serviceList, nil
 }
 
 func (browser *ServiceBrowser) getSpacesURLByOrgName() (_url string, err error) {
@@ -105,6 +102,13 @@ func (browser *ServiceBrowser) getSpacesURLByOrgName() (_url string, err error) 
 		fmt.Println(err)
 		return "", err
 	}
+
+	if res.StatusCode != 200 {
+		err = fmt.Errorf("[%s] on getting organization info", res.Status)
+		fmt.Println(err)
+		return "", err
+	}
+
 	decoder := json.NewDecoder(res.Body)
 
 	var searchResults data.OrgSearchRes
@@ -135,10 +139,21 @@ func (browser *ServiceBrowser) getAppsURLBySpacesURL(spacesURL string) (_url str
 		fmt.Println(err)
 		return "", err
 	}
+
+	if res.StatusCode != 200 {
+		err = fmt.Errorf("[%s] on getting application info", res.Status)
+		fmt.Println(err)
+		return "", err
+	}
+
 	decoder := json.NewDecoder(res.Body)
 
 	var searchResults data.SpaceSearchRes
 	err = decoder.Decode(&searchResults)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
 
 	if searchResults.TotalResults != 1 {
 		err = errors.New("There are more than one space with this name pattern")
@@ -147,7 +162,7 @@ func (browser *ServiceBrowser) getAppsURLBySpacesURL(spacesURL string) (_url str
 	}
 
 	_url = searchResults.Resources[0].Entity.AppsURL
-	return
+	return _url, nil
 }
 
 func (browser *ServiceBrowser) getServicesByName(appsURL string) (serviceList []*services.Service, err error) {
@@ -155,6 +170,9 @@ func (browser *ServiceBrowser) getServicesByName(appsURL string) (serviceList []
 		"GET",
 		browser.serviceConfig.APIEndpoint+appsURL,
 		nil)
+	if err != nil {
+		return nil, err
+	}
 
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Authorization", "Bearer "+browser.token)
@@ -165,6 +183,13 @@ func (browser *ServiceBrowser) getServicesByName(appsURL string) (serviceList []
 		fmt.Println(err)
 		return nil, err
 	}
+
+	if res.StatusCode != 200 {
+		err = fmt.Errorf("[%s] on getting service details", res.Status)
+		fmt.Println(err)
+		return nil, err
+	}
+
 	decoder := json.NewDecoder(res.Body)
 
 	var searchResults data.AppsSearchRes
@@ -182,4 +207,63 @@ func (browser *ServiceBrowser) getServicesByName(appsURL string) (serviceList []
 		}
 	}
 	return result, nil
+}
+
+// CollectAndSaveServiceState collects states of the service
+// and than stores it in the persistant storage
+func (browser *ServiceBrowser) CollectAndSaveServiceState(service *services.Service) (*services.ServiceStatus, error) {
+
+	fmt.Printf("Checking service %+v\n", *service)
+
+	req, err := http.NewRequest(
+		"GET",
+		browser.serviceConfig.APIEndpoint+service.URL+"/stats",
+		nil)
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Authorization", "Bearer "+browser.token)
+
+	client := http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	if res.StatusCode != 200 {
+		err = fmt.Errorf("[%s] on getting State of application", res.Status)
+		fmt.Println(err)
+		return nil, err
+	}
+
+	decoder := json.NewDecoder(res.Body)
+	decoder.UseNumber()
+
+	var serviceStates map[string]*data.InstanceState
+	err = decoder.Decode(&serviceStates)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	// We really do nedd map in our instances state list
+	var instancesStateList = make([]data.InstanceState, len(serviceStates))
+	for _, state := range serviceStates {
+		instancesStateList = append(instancesStateList, *state)
+	}
+
+	// Prepare Service Status
+	var status = services.ServiceStatus{
+		Name:         service.Name,
+		Organization: browser.serviceConfig.Org,
+		Space:        browser.serviceConfig.Space,
+		Instances:    instancesStateList,
+		UpdateTime:   time.Now()}
+
+	return &status, nil
 }

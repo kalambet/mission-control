@@ -36,8 +36,7 @@ func handleStatusRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	director := manager.Director{}
-	director.Start()
+	manager.Direct()
 
 	/*
 		var port string
