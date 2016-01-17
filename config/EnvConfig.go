@@ -8,6 +8,7 @@ type EnvConfig struct {
 	Org         string   `json:"org"`
 	Space       string   `json:"space"`
 	Services    []string `json:"services"`
+	DBURI       string   `json:"db_uri"`
 }
 
 // GetCredentials returns PaaS credentails
