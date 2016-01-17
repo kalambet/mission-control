@@ -5,14 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/kalambet/mission-control/config"
+	"github.com/kalambet/mission-control/db"
 	"github.com/kalambet/mission-control/services"
 )
 
 // Director orchistrates the whole thing
 type Director struct {
 	browser      *ServiceBrowser
+	dbDriver     *db.Driver
 	servicesList []*services.Service
 }
 
@@ -25,9 +28,14 @@ func (d *Director) Init() (err error) {
 		return err
 	}
 
+	d.dbDriver = &db.Driver{
+		URI: configuration.DBURI}
+
+	d.dbDriver.InitDatabase()
+
 	d.browser = &ServiceBrowser{
-		serviceConfig: configuration}
-	//token:         "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkZGQ4NGE4YS05YjNmLTQxMTQtOWViOC0yM2MyYTg2ODUzMGQiLCJzdWIiOiJmNzM1NDVhYy0xYTVkLTRjZGMtOTVkYy04MWE1N2VkODM3NjQiLCJzY29wZSI6WyJjbG91ZF9jb250cm9sbGVyLnJlYWQiLCJwYXNzd29yZC53cml0ZSIsImNsb3VkX2NvbnRyb2xsZXIud3JpdGUiLCJvcGVuaWQiXSwiY2xpZW50X2lkIjoiY2YiLCJjaWQiOiJjZiIsImF6cCI6ImNmIiwiZ3JhbnRfdHlwZSI6InBhc3N3b3JkIiwidXNlcl9pZCI6ImY3MzU0NWFjLTFhNWQtNGNkYy05NWRjLTgxYTU3ZWQ4Mzc2NCIsIm9yaWdpbiI6InVhYSIsInVzZXJfbmFtZSI6InBldGVyLmthbGFtYmV0QHJ1LmlibS5jb20iLCJlbWFpbCI6InBldGVyLmthbGFtYmV0QHJ1LmlibS5jb20iLCJhdXRoX3RpbWUiOjE0NTI2Njc5MjEsInJldl9zaWciOiJjZjkzZDhkZCIsImlhdCI6MTQ1MjY2NzkyMSwiZXhwIjoxNDUyNzExMTIxLCJpc3MiOiJodHRwczovL3VhYS5uZy5ibHVlbWl4Lm5ldC9vYXV0aC90b2tlbiIsInppZCI6InVhYSIsImF1ZCI6WyJjZiIsImNsb3VkX2NvbnRyb2xsZXIiLCJwYXNzd29yZCIsIm9wZW5pZCJdfQ.xyCKDoEJY5G4LiYQop9bbq58boYnf5PQt9JqyS_1Fow"}
+		serviceConfig: configuration,
+		token:         ""}
 
 	d.servicesList, err = d.browser.GetServices()
 	if err != nil {
@@ -37,20 +45,39 @@ func (d *Director) Init() (err error) {
 	return
 }
 
-// GetServicesStatus returns services staus by request
-func (d *Director) GetServicesStatus() (statusList []*services.ServiceStatus, err error) {
-	statusList = make([]*services.ServiceStatus, len(d.servicesList))
-
-	for _, service := range d.servicesList {
-		status, err := d.browser.CollectAndSaveServiceState(service)
-		if err != nil {
-			fmt.Println(err)
-			return nil, err
+// ScheduleStatusCollection returns services staus by request
+func (d *Director) ScheduleStatusCollection() {
+	ticker := time.NewTicker(20 * time.Second)
+	quit := make(chan struct{})
+	//go func() {
+	for {
+		select {
+		case <-ticker.C:
+			for _, service := range d.servicesList {
+				d.collectAndSaveServiceState(service)
+			}
+		case <-quit:
+			ticker.Stop()
+			return
 		}
-		statusList = append(statusList, status)
+	}
+	//}()
+
+	//	return
+}
+
+func (d *Director) collectAndSaveServiceState(service *services.Service) {
+	status, err := d.browser.CollectServiceStatus(service)
+	if err != nil {
+		fmt.Printf("Problem COLLECTING status for servcie %s with the following error: %s\n", service.Name, err)
+		return
 	}
 
-	return statusList, nil
+	err = d.dbDriver.SaveStatus(status)
+	if err != nil {
+		fmt.Printf("Problem SAVING status for servcie %s with the following error: %s\n", service.Name, err)
+		return
+	}
 }
 
 // getConfig reads the config from the Environment Variables
