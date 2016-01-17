@@ -24,7 +24,7 @@ type ServiceBrowser struct {
 }
 
 // GetBearerToken logins into Bluemix and returns bearer token
-func (browser *ServiceBrowser) getBearerToken() (token string, err error) {
+func (browser *ServiceBrowser) getBearerToken() (string, error) {
 	client := http.Client{}
 	login, password := browser.serviceConfig.GetCredentials()
 
@@ -39,6 +39,9 @@ func (browser *ServiceBrowser) getBearerToken() (token string, err error) {
 		"POST",
 		"https://login.ng.bluemix.net/UAALoginServerWAR/oauth/token",
 		bytes.NewBufferString(loginForm.Encode()))
+	if err != nil {
+		return "", err
+	}
 
 	encodedToken := base64.StdEncoding.EncodeToString([]byte("cf:"))
 
@@ -47,22 +50,26 @@ func (browser *ServiceBrowser) getBearerToken() (token string, err error) {
 	req.Header.Add("Authorization", "Basic "+encodedToken)
 
 	res, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
 	decoder := json.NewDecoder(res.Body)
 
 	var loginData types.LoginData
 	err = decoder.Decode(&loginData)
 
-	token = loginData.AccessToken
+	token := loginData.AccessToken
 	fmt.Println("Token is : " + token)
 
-	return
+	return token, nil
 }
 
 // GetServices searches the services by name in PaaS
-func (browser *ServiceBrowser) GetServices() (serviceList []*services.Service, err error) {
+func (browser *ServiceBrowser) GetServices() ([]*services.Service, error) {
 	// 0. Get bearer token
-	token, err := browser.getBearerToken()
-	browser.token = token
+	//token, err := browser.getBearerToken()
+	//browser.token = token
 
 	// 1. Serach for organization ID
 	spacesURL, err := browser.getSpacesURLByOrgName()
@@ -79,7 +86,7 @@ func (browser *ServiceBrowser) GetServices() (serviceList []*services.Service, e
 	fmt.Println("Apps URL: " + appsURL)
 
 	// 3. Search for services
-	serviceList, err = browser.getServicesByName(appsURL)
+	serviceList, err := browser.getServicesByName(appsURL)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +94,7 @@ func (browser *ServiceBrowser) GetServices() (serviceList []*services.Service, e
 	return serviceList, nil
 }
 
-func (browser *ServiceBrowser) getSpacesURLByOrgName() (_url string, err error) {
+func (browser *ServiceBrowser) getSpacesURLByOrgName() (string, error) {
 	req, err := http.NewRequest(
 		"GET",
 		browser.serviceConfig.APIEndpoint+"/v2/organizations?q=name:"+url.QueryEscape(browser.serviceConfig.Org),
@@ -99,14 +106,11 @@ func (browser *ServiceBrowser) getSpacesURLByOrgName() (_url string, err error) 
 	client := http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		fmt.Println(err)
 		return "", err
 	}
 
 	if res.StatusCode != 200 {
-		err = fmt.Errorf("[%s] on getting organization info", res.Status)
-		fmt.Println(err)
-		return "", err
+		return "", fmt.Errorf("[%s] on getting organization info", res.Status)
 	}
 
 	decoder := json.NewDecoder(res.Body)
@@ -115,16 +119,13 @@ func (browser *ServiceBrowser) getSpacesURLByOrgName() (_url string, err error) 
 	err = decoder.Decode(&searchResults)
 
 	if searchResults.TotalResults != 1 {
-		err = errors.New("There are more than one organization with this name pattern")
-		fmt.Println(err)
-		return "", err
+		return "", errors.New("There are more than one organization with this name pattern")
 	}
 
-	_url = searchResults.Resources[0].Entity.SpacesURL
-	return
+	return searchResults.Resources[0].Entity.SpacesURL, nil
 }
 
-func (browser *ServiceBrowser) getAppsURLBySpacesURL(spacesURL string) (_url string, err error) {
+func (browser *ServiceBrowser) getAppsURLBySpacesURL(spacesURL string) (string, error) {
 	req, err := http.NewRequest(
 		"GET",
 		browser.serviceConfig.APIEndpoint+spacesURL+"?q=name:"+url.QueryEscape(browser.serviceConfig.Space),
@@ -136,14 +137,11 @@ func (browser *ServiceBrowser) getAppsURLBySpacesURL(spacesURL string) (_url str
 	client := http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		fmt.Println(err)
 		return "", err
 	}
 
 	if res.StatusCode != 200 {
-		err = fmt.Errorf("[%s] on getting application info", res.Status)
-		fmt.Println(err)
-		return "", err
+		return "", fmt.Errorf("[%s] on getting application info", res.Status)
 	}
 
 	decoder := json.NewDecoder(res.Body)
@@ -156,16 +154,13 @@ func (browser *ServiceBrowser) getAppsURLBySpacesURL(spacesURL string) (_url str
 	}
 
 	if searchResults.TotalResults != 1 {
-		err = errors.New("There are more than one space with this name pattern")
-		fmt.Println(err)
-		return "", err
+		return "", errors.New("There are more than one space with this name pattern")
 	}
 
-	_url = searchResults.Resources[0].Entity.AppsURL
-	return _url, nil
+	return searchResults.Resources[0].Entity.AppsURL, nil
 }
 
-func (browser *ServiceBrowser) getServicesByName(appsURL string) (serviceList []*services.Service, err error) {
+func (browser *ServiceBrowser) getServicesByName(appsURL string) ([]*services.Service, error) {
 	req, err := http.NewRequest(
 		"GET",
 		browser.serviceConfig.APIEndpoint+appsURL,
@@ -185,9 +180,7 @@ func (browser *ServiceBrowser) getServicesByName(appsURL string) (serviceList []
 	}
 
 	if res.StatusCode != 200 {
-		err = fmt.Errorf("[%s] on getting service details", res.Status)
-		fmt.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("[%s] on getting service details", res.Status)
 	}
 
 	decoder := json.NewDecoder(res.Body)
@@ -209,10 +202,9 @@ func (browser *ServiceBrowser) getServicesByName(appsURL string) (serviceList []
 	return result, nil
 }
 
-// CollectAndSaveServiceState collects states of the service
+// CollectServiceStatus collects status of the service
 // and than stores it in the persistant storage
-func (browser *ServiceBrowser) CollectAndSaveServiceState(service *services.Service) (*services.ServiceStatus, error) {
-
+func (browser *ServiceBrowser) CollectServiceStatus(service *services.Service) (*services.ServiceStatus, error) {
 	fmt.Printf("Checking service %+v\n", *service)
 
 	req, err := http.NewRequest(
@@ -221,7 +213,6 @@ func (browser *ServiceBrowser) CollectAndSaveServiceState(service *services.Serv
 		nil)
 
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
@@ -231,14 +222,11 @@ func (browser *ServiceBrowser) CollectAndSaveServiceState(service *services.Serv
 	client := http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
 	if res.StatusCode != 200 {
-		err = fmt.Errorf("[%s] on getting State of application", res.Status)
-		fmt.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("[%s] on getting State of application", res.Status)
 	}
 
 	decoder := json.NewDecoder(res.Body)
@@ -247,14 +235,15 @@ func (browser *ServiceBrowser) CollectAndSaveServiceState(service *services.Serv
 	var serviceStates map[string]*types.InstanceState
 	err = decoder.Decode(&serviceStates)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
 	// We really do nedd map in our instances state list
 	var instancesStateList = make([]types.InstanceState, len(serviceStates))
+	idx := 0
 	for _, state := range serviceStates {
-		instancesStateList = append(instancesStateList, *state)
+		instancesStateList[idx] = *state
+		idx++
 	}
 
 	// Prepare Service Status
