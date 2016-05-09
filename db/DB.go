@@ -3,9 +3,11 @@ package db
 import (
 	"github.com/kalambet/mission-control/services"
 	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 var collectionName = "bmcio"
+var bmcioIndexName = "bmcioIndex"
 
 // Driver is an abstrcation object that connects backend to db
 type Driver struct {
@@ -31,9 +33,18 @@ func (driver *Driver) SaveStatus(state *services.ServiceStatus) error {
 }
 
 // GetStatuses get last `count` serviced status collected entries
-func (driver *Driver) GetStatuses(service *services.Service, count int) []*services.ServiceStatus {
+func (driver *Driver) GetStatuses(service *services.Service, count int) ([]services.ServiceStatus, error) {
+	session, err := mgo.Dial(driver.URI)
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
 
-	return nil
+	var result = make([]services.ServiceStatus, count)
+	collection := session.DB("").C(collectionName)
+	collection.Find(bson.M{"name": service.Name}).Sort("-updatetime").Limit(count).All(&result)
+
+	return result, nil
 }
 
 // InitDatabase initialize database in case it was not initialized already
@@ -48,7 +59,20 @@ func (driver *Driver) InitDatabase() error {
 		Capped:  true,
 		MaxDocs: 25000}
 
-	err = session.DB("").C(collectionName).Create(&collectionInfo)
+	collection := session.DB("").C(collectionName)
+	err = collection.Create(&collectionInfo)
+	if err != nil {
+		return err
+	}
+
+	// Now we need to create an index for the collection
+	var bmcioIndex = mgo.Index{
+		Key:        []string{"name", "updatetime"},
+		Background: true,
+		Name:       bmcioIndexName,
+		Unique:     false}
+
+	err = collection.EnsureIndex(bmcioIndex)
 	if err != nil {
 		return err
 	}

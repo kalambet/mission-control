@@ -49,7 +49,6 @@ func (d *Director) Init() (err error) {
 func (d *Director) ScheduleStatusCollection() {
 	ticker := time.NewTicker(20 * time.Second)
 	quit := make(chan struct{})
-	//go func() {
 	for {
 		select {
 		case <-ticker.C:
@@ -61,9 +60,11 @@ func (d *Director) ScheduleStatusCollection() {
 			return
 		}
 	}
-	//}()
+}
 
-	//	return
+// CollectStatuses just collects all the statuses
+func (d *Director) CollectStatuses() {
+
 }
 
 func (d *Director) collectAndSaveServiceState(service *services.Service) {

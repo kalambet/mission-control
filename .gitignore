@@ -26,3 +26,6 @@ _testmain.go
 test_env.sh
 
 mission-control
+
+.idea/
+.DS_Store

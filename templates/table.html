@@ -26,8 +26,7 @@
 		<th class="state">Status</th>
 	</tr>{{ range $status := . }}
 	<tr>
-		<td class="name">{{ $service.Name }}</td>
-		<>
+		<td class="name">{{ $status.Name }}</td>
 	</tr>{{ end }}
 
 </table>

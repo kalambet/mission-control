@@ -203,7 +203,7 @@ func (browser *ServiceBrowser) getServicesByName(appsURL string) ([]*services.Se
 }
 
 // CollectServiceStatus collects status of the service
-// and than stores it in the persistant storage
+// and than stores it in the persistent storage
 func (browser *ServiceBrowser) CollectServiceStatus(service *services.Service) (*services.ServiceStatus, error) {
 	fmt.Printf("Checking service %+v\n", *service)
 
@@ -252,7 +252,7 @@ func (browser *ServiceBrowser) CollectServiceStatus(service *services.Service) (
 		Organization: browser.serviceConfig.Org,
 		Space:        browser.serviceConfig.Space,
 		Instances:    instancesStateList,
-		UpdateTime:   time.Now()}
+		UpdateTime:   time.Now().String()}
 
 	return &status, nil
 }
